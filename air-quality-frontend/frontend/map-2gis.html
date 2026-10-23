@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Качество воздуха — Алматы (2GIS)</title>
+<script src="https://mapgl.2gis.com/api/js/v1"></script>
+<style>
+:root{--bg:#f1f3f2;--surface:#fff;--text:#1b1f24;--muted:#5d6672;--line:#dde1e6;--accent:#1da033}
+@media (prefers-color-scheme:dark){:root{--bg:#14171b;--surface:#1d2127;--text:#e8eaed;--muted:#9aa3ad;--line:#2d333b}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--bg)}
+#map{position:fixed;inset:0}
+aside{position:fixed;z-index:10;left:12px;top:12px;bottom:12px;width:332px;background:var(--surface);border-radius:16px;box-shadow:0 2px 14px rgba(0,0,0,.2);padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.top{display:flex;align-items:center;gap:8px}
+.top h1{font-size:17px;margin:0;flex:1}
+.badge{font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.badge.live{color:var(--accent);border-color:var(--accent)}
+#q{width:100%;padding:11px 14px;border-radius:12px;border:0;background:var(--bg);color:var(--text);font:inherit;outline:0}
+#q:focus{box-shadow:0 0 0 2px var(--accent)}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.stat b{display:block;font-size:18px}.stat span{font-size:11px;color:var(--muted)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;color:var(--text);padding:7px 4px;font:inherit;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--accent);color:#fff}
+.cat{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:14px;cursor:pointer}
+.cat input{accent-color:var(--accent)}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.cat small{margin-left:auto;color:var(--muted)}
+#detail{border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px}
+#detail .big{font-size:26px;font-weight:700;line-height:1.1}
+#detail dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:10px 0 0}
+#detail dt{color:var(--muted)}#detail dd{margin:0;word-break:break-all}
+.tip{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--bg)}
+.note{font-size:12px;color:var(--muted);margin:0}
+@media (max-width:760px){aside{left:0;right:0;top:auto;bottom:0;width:100%;height:42%;border-radius:16px 16px 0 0}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<aside>
+  <div class="top"><h1>Качество воздуха</h1><span class="badge" id="src">…</span></div>
+  <input id="q" type="search" placeholder="Поиск: устройство или ID замера">
+  <section><div class="stats">
+    <div class="stat"><b id="sN">0</b><span>замеров</span></div>
+    <div class="stat"><b id="sT">–</b><span>сред. °C</span></div>
+    <div class="stat"><b id="sH">–</b><span>сред. %</span></div>
+  </div></section>
+  <section><h2>Период</h2>
+    <div class="seg" id="range">
+      <button data-h="1">1 ч</button><button data-h="24" class="on">24 ч</button><button data-h="168">7 дн</button><button data-h="0">Всё</button>
+    </div></section>
+  <section><h2>Категории</h2><div id="cats"></div></section>
+  <section><h2>Выбранная точка</h2>
+    <div id="detail"><span class="note">Нажмите на точку на карте.</span></div></section>
+  <p class="note">Серая точка — AQI не рассчитан (например, MQ-135 ещё не подключён, mq135_raw = 0).</p>
+</aside>
+
+<script>
+// ===== Настройки =====
+const CFG = {
+  KEY: 'YOUR_2GIS_API_KEY',            // ключ с platform.2gis.com
+  API_BASE: '',                        // например 'https://your-server.kz'
+  MEASUREMENTS: '/api/v1/measurements',
+  CENTER: [76.945, 43.25],             // ВАЖНО: в MapGL порядок [долгота, широта]
+  ZOOM: 12
+};
+/* Ответ backend: { items: [ { measurement_id, device_id, temperature_c, humidity_pct, mq135_raw,
+   latitude, longitude, gps_accuracy_m, measured_at,
+   air_quality: { aqi: 87|null, category: 'moderate'|..., recommendation: '...' } } ] } */
+
+const CATS = [
+  {id:'good',label:'Хорошо (0–50)',color:'#2e9e5b',max:50},
+  {id:'moderate',label:'Умеренно (51–100)',color:'#e0b400',max:100},
+  {id:'usg',label:'Вредно для чувствительных (101–150)',color:'#f08a24',max:150},
+  {id:'unhealthy',label:'Вредно (151–200)',color:'#d93a3a',max:200},
+  {id:'very',label:'Очень вредно (201–300)',color:'#8e44ad',max:300},
+  {id:'hazardous',label:'Опасно (300+)',color:'#7e0023',max:1e9},
+  {id:'unknown',label:'Нет данных',color:'#8a8f98',max:null}
+];
+const catById = id => CATS.find(c => c.id === id) || CATS[6];
+const TIPS = {
+  good:'Воздух чистый, можно проветривать помещение.',
+  moderate:'Достаточно короткого проветривания; не оставайтесь долго в закрытом помещении.',
+  usg:'Людям с болезнями дыхательных путей лучше надеть маску и снизить активность.',
+  unhealthy:'Сократите время на улице, используйте маску или очиститель воздуха.',
+  very:'Оставайтесь дома, окна закройте, включите очиститель воздуха.',
+  hazardous:'Не выходите на улицу, используйте средства защиты.',
+  unknown:'Оценка качества воздуха недоступна: только температура и влажность.'
+};
+
+// ===== Демо-данные (если backend недоступен) =====
+function mockData(){
+  const out=[], now=Date.now();
+  for(let i=0;i<70;i++){
+    const raw = i%9===0 ? 0 : Math.round(120+Math.random()*(i>45?900:520));
+    const aqi = raw===0 ? null : Math.round(raw/4.2);
+    const cat = aqi===null ? 'unknown' : CATS.find(c=>c.max!==null && aqi<=c.max).id;
+    out.push({
+      measurement_id:'demo-'+i, device_id:'ESP32-001',
+      temperature_c:+(18+Math.random()*9).toFixed(1), humidity_pct:+(30+Math.random()*30).toFixed(1),
+      mq135_raw:raw,
+      latitude:43.245+(Math.random()-.5)*.07+Math.sin(i/9)*.01,
+      longitude:76.945+(Math.random()-.5)*.11+Math.cos(i/9)*.015,
+      gps_accuracy_m:+(8+Math.random()*90).toFixed(1),
+      measured_at:new Date(now-i*22*60000).toISOString(),
+      air_quality:{aqi,category:cat,recommendation:TIPS[cat]}
+    });
+  }
+  return out;
+}
+
+// ===== Карта 2GIS =====
+if (typeof mapgl === 'undefined') {
+  document.getElementById('map').innerHTML =
+    '<div style="padding:40px 24px 24px 380px;font:15px system-ui;color:#d93a3a">Скрипт 2GIS MapGL не загрузился (https://mapgl.2gis.com/api/js/v1).<br>Откройте файл в обычном браузере через http://localhost, проверьте интернет и отключите блокировщик рекламы.</div>';
+  throw new Error('MapGL script not loaded');
+}
+const map = new mapgl.Map('map', {center:CFG.CENTER, zoom:CFG.ZOOM, key:CFG.KEY});
+new mapgl.ZoomControl(map, {position:'centerRight'});
+
+let DATA=[], hours=24, Q='', active=new Set(CATS.map(c=>c.id)), shapes=[], ring=null;
+
+const fmtDate = s => { try{return new Date(s).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'});}catch(e){return s;} };
+const avg = a => a.length ? (a.reduce((x,y)=>x+y,0)/a.length).toFixed(1) : '–';
+
+function visible(){
+  const lim = hours ? Date.now()-hours*3600e3 : 0;
+  return DATA.filter(m => new Date(m.measured_at).getTime()>=lim
+    && active.has(m.air_quality?.category||'unknown')
+    && (!Q || (m.device_id+m.measurement_id).toLowerCase().includes(Q)));
+}
+
+function render(){
+  shapes.forEach(s=>s.destroy()); shapes=[];
+  const v=visible();
+  v.forEach(m=>{
+    const c=catById(m.air_quality?.category);
+    const s=new mapgl.CircleMarker(map,{
+      coordinates:[m.longitude,m.latitude],      // [lng, lat]
+      radius:9, color:c.color, strokeColor:'#ffffff', strokeWidth:2
+    });
+    s.on('click',()=>select(m));
+    shapes.push(s);
+  });
+  document.getElementById('sN').textContent=v.length;
+  document.getElementById('sT').textContent=avg(v.map(m=>m.temperature_c));
+  document.getElementById('sH').textContent=avg(v.map(m=>m.humidity_pct));
+  renderCats();
+}
+
+function renderCats(){
+  const win=DATA.filter(m=>!hours||new Date(m.measured_at).getTime()>=Date.now()-hours*3600e3);
+  const box=document.getElementById('cats'); box.innerHTML='';
+  CATS.forEach(c=>{
+    const n=win.filter(m=>(m.air_quality?.category||'unknown')===c.id).length;
+    const row=document.createElement('label'); row.className='cat';
+    row.innerHTML='<input type="checkbox"'+(active.has(c.id)?' checked':'')+'><span class="dot" style="background:'+c.color+'"></span>'+c.label+'<small>'+n+'</small>';
+    row.querySelector('input').onchange=e=>{e.target.checked?active.add(c.id):active.delete(c.id);render();};
+    box.appendChild(row);
+  });
+}
+
+function select(m){
+  const aq=m.air_quality||{}, c=catById(aq.category);
+  if(ring){ring.destroy();ring=null;}
+  if(m.gps_accuracy_m){   // круг погрешности GPS (радиус в метрах)
+    ring=new mapgl.Circle(map,{coordinates:[m.longitude,m.latitude],radius:m.gps_accuracy_m,
+      color:c.color+'22',strokeColor:c.color,strokeWidth:1});
+  }
+  const d=document.getElementById('detail');
+  d.innerHTML='<div class="big" style="color:'+c.color+'">'+(aq.aqi==null?'—':aq.aqi)+'</div><div>'+c.label+'</div>'+
+   '<dl><dt>Температура</dt><dd>'+m.temperature_c+' °C</dd><dt>Влажность</dt><dd>'+m.humidity_pct+' %</dd>'+
+   '<dt>MQ-135 raw</dt><dd>'+m.mq135_raw+'</dd><dt>Погрешность GPS</dt><dd>±'+m.gps_accuracy_m+' м</dd>'+
+   '<dt>Время</dt><dd>'+fmtDate(m.measured_at)+'</dd><dt>Устройство</dt><dd>'+m.device_id+'</dd></dl><div class="tip"></div>';
+  d.querySelector('.tip').textContent=aq.recommendation||TIPS[aq.category||'unknown'];
+}
+
+function fit(){
+  const v=visible(); if(!v.length) return;
+  const lats=v.map(m=>m.latitude), lngs=v.map(m=>m.longitude);
+  map.fitBounds(
+    {northEast:[Math.max(...lngs),Math.max(...lats)], southWest:[Math.min(...lngs),Math.min(...lats)]},
+    {padding:{top:60,bottom:60,left:380,right:60}}
+  );
+}
+
+document.querySelectorAll('#range button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#range button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); hours=+b.dataset.h; render();
+});
+document.getElementById('q').oninput=e=>{Q=e.target.value.trim().toLowerCase();render();};
+
+async function load(){
+  const badge=document.getElementById('src');
+  try{
+    const ctl=new AbortController(); setTimeout(()=>ctl.abort(),4000);
+    const r=await fetch(CFG.API_BASE+CFG.MEASUREMENTS,{signal:ctl.signal});
+    if(!r.ok) throw new Error(r.status);
+    const j=await r.json(); DATA=j.items||j;
+    badge.textContent='Живые данные'; badge.classList.add('live');
+  }catch(e){
+    DATA=mockData(); badge.textContent='Демо-данные';
+  }
+  render();
+}
+map.on('styleload',()=>{});     // карта готова к работе после создания
+load().then(()=>fit());
+setInterval(()=>{ if(document.getElementById('src').classList.contains('live')) load(); },60000);
+</script>
+</body>
+</html>

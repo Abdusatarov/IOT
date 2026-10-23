@@ -1,0 +1,16 @@
+{
+  "measurements": [
+    {
+      "measurement_id": "6571e9b2-c23d-40fb-a79e-6f813d24a8d9",
+      "device_id": "ESP32-001",
+      "temperature_c": 24.6,
+      "humidity_pct": 36.5,
+      "mq135_raw": 0,
+      "latitude": 43.2146908,
+      "longitude": 76.851523,
+      "gps_accuracy_m": 98.4,
+      "measured_at": "2026-09-30T15:38:54.183Z",
+      "synced": false
+    }
+  ]
+}

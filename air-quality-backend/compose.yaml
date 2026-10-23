@@ -1,0 +1,44 @@
+x-backend: &backend
+  build: .
+  environment:
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-air_quality}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-air_quality}
+    API_KEY: ${API_KEY:-}
+    CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+    HOST: 0.0.0.0
+    PORT: 8000
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-air_quality}
+      POSTGRES_USER: ${POSTGRES_USER:-air_quality}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      TZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    <<: *backend
+    command: [alembic, upgrade, head]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    <<: *backend
+    ports:
+      - "${PORT:-8000}:8000"
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  postgres_data:

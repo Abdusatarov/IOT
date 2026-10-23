@@ -1,0 +1,38 @@
+{
+  "items": [
+    {
+      "measurement_id": "6571e9b2-c23d-40fb-a79e-6f813d24a8d9",
+      "device_id": "ESP32-001",
+      "temperature_c": 24.6,
+      "humidity_pct": 36.5,
+      "mq135_raw": 0,
+      "latitude": 43.2146908,
+      "longitude": 76.851523,
+      "gps_accuracy_m": 98.4,
+      "measured_at": "2026-09-30T15:38:54.183Z",
+      "air_quality": {
+        "aqi": null,
+        "category": "unknown",
+        "recommendation": "Оценка качества воздуха недоступна: только температура и влажность.",
+        "algorithm_version": "v1"
+      }
+    },
+    {
+      "measurement_id": "…",
+      "device_id": "ESP32-001",
+      "temperature_c": 22.1,
+      "humidity_pct": 41.0,
+      "mq135_raw": 380,
+      "latitude": 43.25,
+      "longitude": 76.94,
+      "gps_accuracy_m": 12.0,
+      "measured_at": "2026-10-23T09:10:00.000Z",
+      "air_quality": {
+        "aqi": 90,
+        "category": "moderate",
+        "recommendation": "Достаточно короткого проветривания; не оставайтесь долго в закрытом помещении.",
+        "algorithm_version": "v1"
+      }
+    }
+  ]
+}
