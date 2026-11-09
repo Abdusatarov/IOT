@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 *.db
+!data/air_quality.db
 *.db-*
 node_modules/
 .tools/
