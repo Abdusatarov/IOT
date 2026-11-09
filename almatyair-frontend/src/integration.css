@@ -1,0 +1,57 @@
+.districts.card{display:flex;overflow-x:auto;gap:8px;max-width:100%}.districts .district{min-width:145px;flex-shrink:0;color:#ae7346;border-color:#d8b99b}.mini-map{display:flex;flex-direction:column}.mini-map>.air-map{flex:1;min-height:250px}.unit-switch button:last-child{display:none}.card-heading{flex-wrap:wrap}.map-timeline .scale{opacity:.75}.heatmap span:focus{outline:2px solid #347efa}.gauge .good-tag{background:#ba8a5515;color:#94623b}.district.chosen{background:#ba8a5525;border-color:#94623b}
+.map-palette{position:relative;color:var(--text)}
+.map-palette summary{cursor:pointer;list-style:none;padding:4px 0}
+.map-palette summary::-webkit-details-marker{display:none}
+.palette-label{display:block;font-size:12px;font-weight:600;margin-bottom:5px}
+.palette-swatches{display:flex;overflow:hidden;border-radius:6px;min-width:0}
+.palette-swatches>span{height:12px;flex:1}
+.palette-range{display:flex;justify-content:space-between;color:var(--muted);margin-top:3px}
+.palette-options{position:absolute;left:0;right:0;bottom:calc(100% + 8px);max-height:min(48vh,350px);overflow:auto;border:1px solid var(--line);box-shadow:0 8px 30px #0003}
+.palette-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px}
+.palette-presets button{padding:7px;border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px}
+.palette-presets button[aria-pressed=true]{border-color:#347efa;background:var(--soft)}
+.palette-presets .palette-swatches{margin-bottom:3px}
+.palette-custom{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.palette-custom label{display:grid;justify-items:center;font-size:10px}
+.map-timeline .palette-custom input[type=color]{width:32px;height:27px;padding:0;margin:0;cursor:pointer}
+.palette-custom small{flex-basis:100%;color:var(--muted)}
+
+.app.dark .air-map{background:#18232d}
+/* Apply the filter only to basemap tiles so sensor colors stay accurate. */
+.app.dark .air-map .leaflet-tile-pane{
+  filter:invert(.92) hue-rotate(180deg) saturate(.65) brightness(.82) contrast(.95);
+}
+.app.dark .air-map :is(.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-tooltip,.leaflet-bar a){
+  background:var(--card);
+  color:var(--text);
+  border-color:var(--line);
+}
+.app.dark .air-map .leaflet-tooltip-top::before{border-top-color:var(--card)}
+.app.dark .air-map .leaflet-tooltip-bottom::before{border-bottom-color:var(--card)}
+.app.dark .air-map .leaflet-tooltip-left::before{border-left-color:var(--card)}
+.app.dark .air-map .leaflet-tooltip-right::before{border-right-color:var(--card)}
+.app.dark .air-map .leaflet-control-attribution{background:#18232de8;color:var(--muted)}
+.app.dark .air-map .leaflet-control-attribution a{color:#9ccaff}
+.full-map{display:grid;grid-template-rows:auto minmax(0,1fr)}
+.full-map>.air-map{min-height:0}
+.map-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;padding:8px 16px;background:var(--card);color:var(--text)}
+.map-toolbar label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.map-device-control{margin-left:auto;min-width:0;max-width:100%}
+.map-device-control label{flex-wrap:nowrap;white-space:nowrap}
+.map-device-control select{width:auto;min-width:0;max-width:100%;margin:0}
+
+.analysis-layout{display:grid;gap:16px}
+.analysis-layout .analytics-banner{flex-wrap:wrap}
+.analysis-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}
+.analysis-controls button,.analysis-table button{padding:6px 10px;border:1px solid var(--line);border-radius:8px;color:var(--text)}
+.analysis-controls button[aria-pressed=true],.analysis-table button[aria-pressed=true]{background:#347efa;color:#fff}
+.analysis-plot{min-height:300px;touch-action:pan-y;cursor:grab}
+.analysis-position{display:grid;gap:4px;color:var(--muted);font-size:12px}
+.analysis-position input{width:100%;accent-color:#347efa}
+.analysis-table-wrap{overflow-x:auto;margin:12px 0}
+.analysis-table{width:100%;border-collapse:collapse;text-align:left;white-space:nowrap;font-size:13px}
+.analysis-table :is(td,th){padding:8px;border-bottom:1px solid var(--line)}
+.analysis-search{max-width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text)}
+.analysis-comparison{margin-top:16px}
+.analysis-comparison summary{cursor:pointer}
+.analysis-layout .chart-card{scroll-margin-top:140px}

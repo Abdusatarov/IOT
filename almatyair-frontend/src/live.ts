@@ -1,0 +1,7 @@
+import {useEffect,useState} from 'react'
+export type Reading={measurement_id:string;device_id:string;latitude:number|null;longitude:number|null;mq135_raw:number|null;temperature_c:number|null;humidity_pct:number|null;gps_accuracy_m:number|null;measured_at:string}
+let pending:Promise<Reading[]>|null=null
+export function useReadings(){const [rows,setRows]=useState<Reading[]>([]),[error,setError]=useState('');useEffect(()=>{let active=true;async function load(){try{pending??=(async()=>{const all:Reading[]=[];for(let offset=0;;offset+=1000){const r=await fetch(`/api/v1/measurements?limit=1000&offset=${offset}`);if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json();all.push(...j.measurements);if(all.length>=j.total||!j.measurements.length)return all}})();const result=await pending;if(active){setRows(result);setError('')}}catch(e){pending=null;if(active)setError(String(e))}}load();const timer=setInterval(()=>{pending=null;load()},60000);return()=>{active=false;clearInterval(timer)}},[]);return {rows,error}}
+export function average(values:(number|null)[]){const v=values.filter((n):n is number=>n!==null);return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length*10)/10:null}
+export const rawColors=['#f5dcba','#e9b47d','#ce8854','#ae5c36','#833c24','#532516']
+export function rawColor(value:number|null,min=0,max=4095,colors=rawColors){return value===null?'#a0a9b8':colors[Math.min(colors.length-1,Math.max(0,Math.floor((value-min)/(max-min||1)*colors.length)))]}

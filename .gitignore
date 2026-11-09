@@ -9,3 +9,6 @@ __pycache__/
 *.db
 *.db-*
 node_modules/
+.tools/
+*.log
+*.backup-*.json

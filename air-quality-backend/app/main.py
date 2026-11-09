@@ -1,5 +1,6 @@
 import logging
 import secrets
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
@@ -7,6 +8,8 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Reques
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -140,12 +143,45 @@ def create_app(settings=None, processor=None):
                 'reason': 'Calibrated pollutant measurements and a selected AQI standard are required.'}
 
     original_openapi = app.openapi
+    @app.get('/api/v1/calendar', dependencies=[Depends(authorize)])
+    def calendar(year: int = Query(..., ge=2000, le=2100), device_id: str | None = None,
+                 session=Depends(session_dependency)):
+        start = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        query = select(Measurement.measured_at, Measurement.mq135_raw).where(
+            Measurement.measured_at >= start, Measurement.measured_at < end)
+        if device_id is not None:
+            query = query.where(Measurement.device_id == device_id)
+        days = {}
+        for timestamp, raw in session.execute(query):
+            key = timestamp.astimezone(timezone.utc).date().isoformat()
+            entry = days.setdefault(key, {'date': key, 'count': 0, 'values': []})
+            entry['count'] += 1
+            if raw is not None:
+                entry['values'].append(raw)
+        result = []
+        for key in sorted(days):
+            entry = days[key]
+            values = entry.pop('values')
+            entry.update(avg=round(sum(values)/len(values), 2) if values else None,
+                         min=min(values) if values else None, max=max(values) if values else None)
+            result.append(entry)
+        return {'year': year, 'timezone': 'UTC', 'metric': 'mq135_raw', 'days': result}
+
     def custom_openapi():
         schema = original_openapi()
         schema['components']['schemas']['MeasurementIn'] = MeasurementIn.model_json_schema()
         schema['components']['schemas']['BatchIn']['properties']['measurements']['items'] = {'$ref': '#/components/schemas/MeasurementIn'}
         return schema
     app.openapi = custom_openapi
+    new_frontend = Path(__file__).resolve().parents[2] / 'almatyair-frontend' / 'dist'
+    if (new_frontend / 'index.html').is_file():
+        @app.get('/', include_in_schema=False)
+        def web_map():
+            return FileResponse(new_frontend / 'index.html')
+
+    if (new_frontend / 'assets').is_dir():
+        app.mount('/assets', StaticFiles(directory=new_frontend / 'assets'), name='assets')
     return app
 
 
