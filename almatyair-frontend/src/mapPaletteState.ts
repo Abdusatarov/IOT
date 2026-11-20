@@ -2,6 +2,7 @@ import {useState} from 'react'
 import {rawColors} from './live'
 
 export const palettes = {
+  graphite: {label: 'Графит', colors: ['#edf0f3','#cbd2da','#a4afbd','#7b899c','#536276','#2c394b']},
   brown: {label: 'Коричневая', colors: rawColors},
   ocean: {label: 'Океан', colors: ['#e1f7f3','#a8e3dc','#64c8ca','#349bb9','#245f99','#142c65']},
   violet: {label: 'Фиолетовая', colors: ['#f3e7fc','#ddc0f0','#b993df','#905dbe','#653894','#391c63']},

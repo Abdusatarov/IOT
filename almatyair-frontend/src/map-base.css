@@ -1,0 +1,12 @@
+.air-map{height:100%;width:100%;z-index:1;background:var(--bg)}
+.air-map .leaflet-tooltip{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-control);box-shadow:none;font-family:var(--font-ui);font-size:var(--font-caption)}
+.air-map .leaflet-tooltip-top::before{border-top-color:var(--border)}
+.air-map .leaflet-tooltip-bottom::before{border-bottom-color:var(--border)}
+.air-map .leaflet-tooltip-left::before{border-left-color:var(--border)}
+.air-map .leaflet-tooltip-right::before{border-right-color:var(--border)}
+.air-map .leaflet-bar{box-shadow:none;border:1px solid var(--border)}
+.air-map .leaflet-bar a{background:var(--surface);color:var(--text);border-color:var(--border);width:44px;height:44px;line-height:44px}
+.air-map .leaflet-control-attribution{background:var(--surface);color:var(--text-muted);font-family:var(--font-ui)}
+.air-map .leaflet-control-attribution a{color:var(--accent)}
+/* Filter basemap tiles only; measurement colors and overlays remain unchanged. */
+.app.dark .air-map .leaflet-tile-pane{filter:invert(.92) hue-rotate(180deg) saturate(.65) brightness(.82) contrast(.95)}

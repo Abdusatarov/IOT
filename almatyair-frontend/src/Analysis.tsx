@@ -1,159 +1,71 @@
-import {useMemo,useRef,useState} from 'react'
-import {CartesianGrid,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts'
+import {Suspense,useEffect,useMemo,useRef,useState} from 'react'
+import type {ReactNode} from 'react'
+import {ArrowDownRight,ArrowUpRight,ChevronDown,List,Maximize2,Minimize2,Minus,PanelLeftClose,Search} from 'lucide-react'
 import {average} from './live'
+import {readPreference,savePreference} from './navigation'
 import type {Reading} from './live'
+import {analysisGroups} from './analysisData'
+import {formatDateTime,formatValue} from './time'
+import HistoryChart from './HistoryChart'
+import {Button,Card,DeviceCombobox,EmptyState,ErrorState,Notice,SegmentedControl,Skeleton} from './components/UI'
+import './analysis-page.css'
 
-const metrics = {
-  mq135_raw: {label: 'MQ-135', unit: 'raw'},
-  temperature_c: {label: 'Температура', unit: '°C'},
-  humidity_pct: {label: 'Влажность', unit: '%'},
-  gps_accuracy_m: {label: 'Точность GPS', unit: 'м'},
-}
-type Metric = keyof typeof metrics
-const hour = 3600000
-const dateLabel = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-})
-const fmt = (value: number | null) => value === null ? '—' : value.toLocaleString('ru-RU', {maximumFractionDigits: 1})
-
-function History({rows}: {rows: Reading[]}) {
-  const [metric, setMetric] = useState<Metric>('mq135_raw')
-  const [zoom, setZoom] = useState(1)
-  const [position, setPosition] = useState(1)
-  const drag = useRef<{x: number; position: number} | null>(null)
-  const points = useMemo(() => rows.map(row => ({time: Date.parse(row.measured_at), value: row[metric]})), [rows, metric])
-  if (!points.length) return <p className="muted">Нет измерений в выбранном периоде.</p>
-  const first = points[0].time
-  const last = Math.max(first + 1, points[points.length - 1].time)
-  const span = last - first
-  const width = Math.max(Math.min(span, hour), span / zoom)
-  const travel = span - width
-  const left = first + travel * position
-  const right = left + width
-  const shown = points.filter(point => point.time >= left && point.time <= right)
-  const {label, unit} = metrics[metric]
-  function changeZoom(factor: number) {
-    setZoom(current => Math.max(1, Math.min(Math.max(1, span / hour), current * factor)))
+type Props={rows:Reading[];initialDevice?:string;loading?:boolean;error?:string;onRetry:()=>void;comparison?:(device:string)=>ReactNode}
+export default function Analysis({rows,initialDevice,loading=false,error='',onRetry,comparison}:Props){
+ const [period,setPeriod]=useState(initialDevice?0:720),[search,setSearch]=useState(''),[device,setDevice]=useState(initialDevice??''),[deviceFilter,setDeviceFilter]=useState('Весь город'),[comparisonOpen,setComparisonOpen]=useState(false)
+ const [fullscreen,setFullscreen]=useState(false),[listHidden,setListHidden]=useState(()=>readPreference('almatyair.analysisListHidden','0')==='1')
+ const chart=useRef<HTMLElement>(null),fullButton=useRef<HTMLButtonElement>(null)
+ useEffect(()=>{
+  if(!fullscreen)return
+  const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow
+  document.body.style.overflow='hidden';document.body.classList.add('analysis-fullscreen-active')
+  const background=Array.from(document.querySelectorAll<HTMLElement>('.shell-sidebar,.shell-topbar,.shell-mobile-nav,.shell-welcome,.analysis-page-heading,.analysis-top-controls,.analysis-network-summary,.analysis-workspace-toolbar,.analysis-device-list,.analysis-period-comparison,.analysis-footnote,.analysis-refresh-error'))
+  const inert=background.map(node=>node.inert);background.forEach(node=>{node.inert=true})
+  fullButton.current?.focus({preventScroll:true})
+  const resizeFrame=requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')))
+  function key(event:KeyboardEvent){
+   if(event.key==='Escape'&&!event.defaultPrevented){event.preventDefault();setFullscreen(false)}
+   if(event.key==='Tab'){
+    const controls=Array.from(chart.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select,[tabindex="0"]')??[]).filter(node=>node.getClientRects().length)
+    const first=controls[0],last=controls[controls.length-1]
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+   }
   }
-  return <>
-    <div className="analysis-controls">
-      {Object.entries(metrics).map(([key, item]) => <button type="button" key={key}
-        aria-pressed={metric === key} onClick={() => setMetric(key as Metric)}>{item.label}</button>)}
-    </div>
-    <div className="analysis-controls">
-      <button type="button" aria-label="Приблизить" onClick={() => changeZoom(2)}>+</button>
-      <button type="button" aria-label="Отдалить" onClick={() => changeZoom(.5)}>−</button>
-      <button type="button" onClick={() => {setZoom(1); setPosition(1)}}>Весь период</button>
-      <span>{dateLabel.format(left)} — {dateLabel.format(right)}</span>
-    </div>
-    <div className="analysis-plot" onPointerDown={event => {
-      if (event.button !== 0 || travel <= 0) return
-      drag.current = {x: event.clientX, position}
-      event.currentTarget.setPointerCapture(event.pointerId)
-    }} onPointerMove={event => {
-      if (!drag.current || travel <= 0) return
-      const offset = (event.clientX - drag.current.x) / event.currentTarget.clientWidth * width / travel
-      setPosition(Math.max(0, Math.min(1, drag.current.position - offset)))
-    }} onLostPointerCapture={() => {drag.current = null}}>
-      {shown.some(point => point.value !== null) ?
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={shown}>
-            <CartesianGrid stroke="var(--line)" />
-            <XAxis type="number" dataKey="time" domain={[left, right]} tickFormatter={time => dateLabel.format(time)}
-              minTickGap={45} tick={{fontSize: 11}} />
-            <YAxis domain={['auto', 'auto']} tick={{fontSize: 11}} />
-            <Tooltip labelFormatter={time => dateLabel.format(Number(time))}
-              formatter={value => [`${value} ${unit}`, label]}
-              contentStyle={{background: 'var(--card)', borderColor: 'var(--line)'}} />
-            <Line dataKey="value" name={label} stroke="#347efa" strokeWidth={2}
-              dot={shown.length < 80} connectNulls={false} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer> : <p className="muted">Нет значений этого показателя на выбранном участке.</p>}
-    </div>
-    <label className="analysis-position">Положение на шкале времени
-      <input type="range" min="0" max="1000" value={Math.round(position * 1000)} disabled={travel <= 0}
-        onChange={event => setPosition(Number(event.target.value) / 1000)} />
-    </label>
-    <small className="muted">Приблизь график, затем перетащи его или сдвинь ползунок. Время Алматы.</small>
-  </>
-}
+  document.addEventListener('keydown',key)
+  return()=>{cancelAnimationFrame(resizeFrame);document.body.style.overflow=overflow;document.body.classList.remove('analysis-fullscreen-active');background.forEach((node,index)=>{node.inert=inert[index]});document.removeEventListener('keydown',key);if(previous?.isConnected)previous.focus({preventScroll:true})}
+ },[fullscreen])
+ function toggleList(){setListHidden(!listHidden);savePreference('almatyair.analysisListHidden',listHidden?'0':'1')}
 
-export default function Analysis({rows}: {rows: Reading[]}) {
-  const [period, setPeriod] = useState(720)
-  const [search, setSearch] = useState('')
-  const [device, setDevice] = useState('')
-  const chart = useRef<HTMLElement>(null)
-  const {groups, count} = useMemo(() => {
-    const timed = rows.map(row => ({row, time: Date.parse(row.measured_at)})).filter(item => Number.isFinite(item.time))
-    const end = timed.reduce((max, item) => Math.max(max, item.time), -Infinity)
-    const byDevice = new Map<string, typeof timed>()
-    let count = 0
-    for (const item of timed) {
-      if (period && item.time <= end - period * hour) continue
-      const id = item.row.device_id
-      if (!byDevice.has(id)) byDevice.set(id, [])
-      byDevice.get(id)!.push(item)
-      count++
-    }
-    const groups = [...byDevice].sort(([a], [b]) => a.localeCompare(b)).map(([id, readings]) => {
-      const history = readings.sort((a,b) => a.time - b.time).map(item => item.row)
-      const raw = history.map(row => row.mq135_raw).filter(value => value !== null)
-      return {id, history, latest: history[history.length - 1], delta: raw.length >= 2 ? raw[raw.length - 1] - raw[0] : null}
-    })
-    return {groups, count}
-  }, [rows, period])
-  const selected = groups.find(group => group.id === device) ?? groups[0]
-  const shown = groups.filter(group => group.id.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
-  const latest = groups.map(group => group.latest)
-  return <div className="analysis-layout">
-    <section className="card analytics-banner">
-      <div><h2>Анализ сети датчиков</h2><p>Сводка по последним показаниям устройств</p></div>
-      <label>Период<select value={period} onChange={event => setPeriod(Number(event.target.value))}>
-        <option value={24}>24 часа</option><option value={168}>7 дней</option>
-        <option value={720}>30 дней</option><option value={0}>Вся история</option>
-      </select></label>
-    </section>
-    <div className="metrics">
-      {[
-        ['Датчики', groups.length, 'В выбранном периоде'],
-        ['Измерения', count, 'От последней записи в базе'],
-        ['Температура', fmt(average(latest.map(row => row.temperature_c))), '°C'],
-        ['Влажность', fmt(average(latest.map(row => row.humidity_pct))), '%'],
-        ['MQ-135', fmt(average(latest.map(row => row.mq135_raw))), 'raw'],
-      ].map(([label,value,unit]) => <section className="card metric" key={label}>
-        <p>{label}</p><strong>{value.toLocaleString('ru-RU')}</strong><small>{unit}</small>
-      </section>)}
-    </div>
-    <section className="card chart-card" ref={chart}>
-      <div className="card-heading"><h2>История датчика</h2>
-        <select aria-label="Датчик для графика" value={selected?.id ?? ''} disabled={!selected}
-          onChange={event => setDevice(event.target.value)}>
-          {groups.map(group => <option key={group.id}>{group.id}</option>)}
-        </select>
-      </div>
-      <History key={`${selected?.id}:${period}`} rows={selected?.history ?? []} />
-    </section>
-    <section className="card">
-      <div className="card-heading"><h2>Список датчиков</h2>
-        <input className="analysis-search" type="search" aria-label="Поиск по датчикам"
-          placeholder="Например, ESP32-001" value={search} onChange={event => setSearch(event.target.value)} />
-      </div>
-      <div className="analysis-table-wrap"><table className="analysis-table">
-        <thead><tr><th>Датчик</th><th>Последнее измерение</th><th>°C</th><th>Влажность</th>
-          <th>MQ-135 raw</th><th>Δ raw</th><th>Записей</th></tr></thead>
-        <tbody>{shown.map(({id, history, latest, delta}) => <tr key={id}>
-          <td><button type="button" aria-pressed={selected?.id === id} onClick={() => {
-            setDevice(id)
-            chart.current?.scrollIntoView({block: 'nearest'})
-          }}>{id}</button></td>
-          <td>{dateLabel.format(Date.parse(latest.measured_at))}</td>
-          <td>{fmt(latest.temperature_c)}</td><td>{fmt(latest.humidity_pct)}</td>
-          <td>{fmt(latest.mq135_raw)}</td><td>{delta !== null && delta > 0 ? '+' : ''}{fmt(delta)}</td>
-          <td>{history.length}</td>
-        </tr>)}</tbody>
-      </table></div>
-      {!shown.length && <p className="muted">{groups.length ? 'Датчики по этому запросу не найдены.' : 'Нет измерений.'}</p>}
-      <small className="muted">Δ raw — разница между первым и последним доступными значениями за период.</small>
-    </section>
-  </div>
+ const {groups,count}=useMemo(()=>analysisGroups(rows,period),[rows,period])
+ const selected=device?groups.find(group=>group.id===device):groups[0]
+ const shown=groups.filter(group=>(deviceFilter==='Весь город'||group.id===deviceFilter)&&group.id.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+ const latest=groups.map(group=>group.latest)
+ const devices=[...new Set(rows.map(row=>row.device_id))].sort()
+ function filter(id:string){setDeviceFilter(id);if(id!=='Весь город')setDevice(id)}
+ function choose(id:string){setDevice(id);chart.current?.scrollIntoView({block:'nearest'})}
+ return <div className="analysis-page">
+  <div className="analysis-page-heading"><div><p>ИСТОРИЯ И СРАВНЕНИЕ</p><h1>Анализ измерений</h1><span>От общей картины — к истории отдельного устройства.</span></div><span className="analysis-data-label">MQ-135 raw · без калибровки</span></div>
+  <div className="analysis-top-controls"><DeviceCombobox devices={devices} value={deviceFilter} onChange={filter} label="Устройства в списке"/><div className="analysis-periods"><span className="ui-label">Период анализа</span><SegmentedControl label="Период анализа" value={String(period)} onChange={value=>setPeriod(Number(value))} options={[{value:'24',label:'Сутки'},{value:'168',label:'Неделя'},{value:'720',label:'Месяц'},{value:'0',label:'Вся история'}]}/></div></div>
+  {error&&rows.length>0&&<Notice kind="warning"><div className="analysis-refresh-error"><span>Не удалось обновить данные. Показана последняя загруженная история.</span><Button onClick={onRetry}>Повторить</Button></div></Notice>}
+  <section className="analysis-network-summary" aria-label="Сводка сети за период">{[
+   {label:'Устройства',value:groups.length.toLocaleString('ru-RU'),unit:'в выбранном периоде'},
+   {label:'Измерения',value:count.toLocaleString('ru-RU'),unit:'в выбранном периоде'},
+   {label:'Ср. температура',value:formatValue(average(latest.map(row=>row.temperature_c))),unit:'°C · последние показания'},
+   {label:'Ср. влажность',value:formatValue(average(latest.map(row=>row.humidity_pct))),unit:'% · последние показания'},
+  ].map(({label,value,unit})=><div key={label}><span>{label}</span>{loading&&!rows.length?<Skeleton style={{height:32,width:'50%'}}/>:<strong>{error&&!rows.length?'—':value}</strong>}<small>{unit}</small></div>)}</section>
+  {error&&!rows.length?<ErrorState onRetry={onRetry}/>:<><div className="analysis-workspace-toolbar"><Button variant="ghost" aria-expanded={!listHidden} aria-controls="analysis-device-list" onClick={toggleList}>{listHidden?<List size={18} strokeWidth={1.5}/>:<PanelLeftClose size={18} strokeWidth={1.5}/>}{listHidden?'Показать список':'Скрыть список'}</Button></div><div className={`analysis-workspace ${listHidden?'is-list-hidden':''}`}>
+
+   <Card className="analysis-device-list" id="analysis-device-list" hidden={listHidden}><div className="analysis-list-heading"><h2>Устройства</h2><span>{shown.length} из {groups.length}</span></div><div className="analysis-list-search"><Search size={18} strokeWidth={1.5} aria-hidden="true"/><input type="search" aria-label="Поиск по датчикам" placeholder="Найти устройство" value={search} onChange={event=>setSearch(event.target.value)}/></div>
+    {loading&&!rows.length?<div className="analysis-list-loading" role="status" aria-label="Загрузка списка устройств">{[0,1,2,3].map(i=><Skeleton key={i} style={{height:44}}/>)}</div>:<div className="analysis-devices-scroll"><table className="analysis-devices-table"><thead><tr><th scope="col">Устройство</th><th scope="col">raw</th><th scope="col">Время</th><th scope="col">Записей</th><th scope="col">Δ raw</th></tr></thead><tbody>{shown.map(({id,history,latest,delta})=>{const Delta=delta===null||delta===0?Minus:delta>0?ArrowUpRight:ArrowDownRight;return <tr key={id} data-selected={selected?.id===id}><td><button type="button" className="analysis-select-device" aria-label={`Выбрать ${id}`} aria-pressed={selected?.id===id} onClick={()=>choose(id)}>{id}</button>{history.some(row=>row.is_synthetic===true)&&<span className="analysis-demo">Есть демо</span>}</td><td className="analysis-cell-value">{formatValue(latest.mq135_raw)}</td><td><time dateTime={latest.measured_at}>{formatDateTime(latest.measured_at)}</time></td><td className="analysis-cell-value">{history.length.toLocaleString('ru-RU')}</td><td className="analysis-cell-value"><span className="analysis-delta"><Delta size={14} strokeWidth={1.5} aria-hidden="true"/>{delta!==null&&delta>0?'+':''}{formatValue(delta)}</span></td></tr>})}</tbody></table>{!shown.length&&<EmptyState title={groups.length?'Устройства не найдены':'Нет измерений за этот период'} description="Измените поиск, устройство или период анализа."/>}</div>}
+    <p className="analysis-table-mobile-hint">Таблицу можно прокручивать по горизонтали.</p>
+    <p className="analysis-list-note">Δ raw — разница между первым и последним доступными значениями за период. Время Алматы.</p>
+   </Card>
+   <section className={`ui-card analysis-history ${fullscreen?'is-fullscreen':''}`} ref={chart} role={fullscreen?'dialog':undefined} aria-modal={fullscreen||undefined} aria-label="Подробный график датчика"><div className="analysis-history-heading"><div><span className="ui-label">История устройства</span><h2>{selected?.id||device||'Выберите устройство'}</h2></div><div className="analysis-history-actions">{fullscreen&&<label className="analysis-fullscreen-period">Период<select aria-label="Период полноэкранного графика" value={period} onChange={event=>setPeriod(Number(event.target.value))}>{[{value:24,label:'Сутки'},{value:168,label:'Неделя'},{value:720,label:'Месяц'},{value:0,label:'Вся история'}].map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}<button ref={fullButton} type="button" className="ui-button ui-button--ghost analysis-fullscreen-toggle" aria-label={fullscreen?'Закрыть полный экран':'Во весь экран'} aria-expanded={fullscreen} onClick={()=>setFullscreen(!fullscreen)}>{fullscreen?<Minimize2 size={18} strokeWidth={1.5}/>:<Maximize2 size={18} strokeWidth={1.5}/>}<span>{fullscreen?'Закрыть':'Во весь экран'}</span></button></div></div>
+    {loading&&!rows.length?<div className="analysis-history-loading" role="status" aria-label="Загрузка истории"><Skeleton style={{height:44}}/><Skeleton style={{height:320}}/></div>:<HistoryChart key={selected?.id??device} rows={selected?.history??[]}/>}
+   </section>
+  </div></>}
+  {comparison&&<details className="analysis-period-comparison" open={comparisonOpen} onToggle={event=>setComparisonOpen(event.currentTarget.open)}><summary><span>Сравнение периодов MQ-135</span><ChevronDown size={18} strokeWidth={1.5} aria-hidden="true"/></summary>{comparisonOpen&&<Suspense fallback={<div className="analysis-comparison-loading" role="status" aria-label="Загрузка сравнения"><Skeleton style={{height:240}}/></div>}>{comparison(selected?.id||device||'Весь город')}</Suspense>}</details>}
+  <p className="analysis-footnote">Сводка относится ко всей сети за выбранный период. Фильтр и поиск меняют список устройств; график показывает выделенное устройство. Периоды отсчитываются от последней записи в базе.</p>
+ </div>
 }

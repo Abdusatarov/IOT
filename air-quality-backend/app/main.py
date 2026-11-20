@@ -1,7 +1,7 @@
 import logging
 import secrets
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Annotated
 from uuid import UUID
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
@@ -95,6 +95,30 @@ def create_app(settings=None, processor=None):
         if max_accuracy_m is not None:
             clauses.append(Measurement.gps_accuracy_m <= max_accuracy_m)
         return clauses
+
+    @app.get('/api/v1/dashboard/snapshot', dependencies=[Depends(authorize)])
+    def dashboard_snapshot(hour: int = Query(24, ge=0, le=24), session=Depends(session_dependency)):
+        end, count, minimum, maximum = session.execute(select(
+            func.max(Measurement.measured_at), func.count(Measurement.id),
+            func.min(Measurement.mq135_raw), func.max(Measurement.mq135_raw))).one()
+        if end is None:
+            return {'end': None, 'cutoff': None, 'total': 0, 'devices': [],
+                    'min': 0, 'max': 4095, 'measurements': []}
+        cutoff = end - timedelta(hours=24-hour)
+        ranked = select(Measurement.id.label('id'), func.row_number().over(
+            partition_by=Measurement.device_id,
+            order_by=(Measurement.measured_at.desc(), Measurement.id.desc())).label('position')
+        ).where(Measurement.measured_at <= cutoff).subquery()
+        names = ('measurement_id', 'device_id', 'temperature_c', 'humidity_pct', 'mq135_raw',
+                 'latitude', 'longitude', 'altitude_m', 'gps_accuracy_m', 'measured_at')
+        rows = session.execute(select(*(getattr(Measurement, name) for name in names))
+            .join(ranked, Measurement.id == ranked.c.id).where(ranked.c.position == 1)
+            .order_by(Measurement.device_id)).mappings().all()
+        devices = list(session.scalars(select(Measurement.device_id).distinct().order_by(Measurement.device_id)))
+        return {'end': end, 'cutoff': cutoff, 'total': count, 'devices': devices,
+                'min': minimum if minimum is not None else 0,
+                'max': maximum if maximum is not None else 4095,
+                'measurements': [dict(row) for row in rows]}
 
     @app.get('/api/v1/measurements', dependencies=[Depends(authorize)])
     def measurements(clauses=Depends(filters), limit: int = Query(100, ge=1, le=1000),
