@@ -1,10 +1,11 @@
 import {useEffect,useState} from 'react'
-import {Activity,ArrowUpRight,Droplets,Radio,Thermometer} from 'lucide-react'
+import {Activity,ArrowUpRight,Droplets,Thermometer} from 'lucide-react'
 import type {Reading} from '../live'
 import {average} from '../live'
 import type {CalendarDay} from '../calendarData'
 import {formatValue} from '../time'
 import {Button} from './UI'
+import AirMascot from './AirMascot'
 import './AirSummary.css'
 
 type Props={latest:Reading[];device:string;onAnalyze:()=>void}
@@ -42,11 +43,11 @@ function Summary({latest,device,end,onAnalyze}:Props&{end:number}){
  const displayDate=(value:string)=>new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(value+'T00:00:00Z'))
  return <section className="air-summary" aria-labelledby="air-summary-title">
   <header className="air-summary-header"><div><span className="air-summary-brand"><Activity size={18} aria-hidden="true"/>ALMATYAIR</span><h2 id="air-summary-title">Пульс наблюдений</h2><p>{device==='Весь город'?'Средние последних показаний устройств':device}</p></div><Button variant="ghost" onClick={onAnalyze}>Анализ<ArrowUpRight size={16} aria-hidden="true"/></Button></header>
-  <div className="air-summary-body"><div className="air-summary-signal"><div className="air-summary-orbit" aria-hidden="true"><Radio size={42} strokeWidth={1.4}/></div><div><span className="air-summary-label">MQ-135 · исходный сигнал</span><p className="air-summary-value">{formatValue(raw)}<span>raw</span></p><span className="air-summary-label">{latest.length?`${latest.length} устройств в выборке`:'Ожидаем измерения'}</span></div></div>
+  <div className="air-summary-body"><div className="air-summary-signal"><AirMascot value={active?.avg??null} low={low} high={high} pending={loading||error}/><div><span className="air-summary-label">MQ-135 · исходный сигнал</span><p className="air-summary-value">{formatValue(raw)}<span>raw</span></p><span className="air-summary-label">{latest.length?`${latest.length} устройств в выборке`:'Ожидаем измерения'}</span></div></div>
    <div className="air-summary-history"><div className="air-summary-stats"><span><Thermometer size={17} aria-hidden="true"/>{formatValue(temperature)} °C</span><span><Droplets size={17} aria-hidden="true"/>{formatValue(humidity)} %</span></div><p className="air-summary-period">{date?`7 дней до ${displayDate(date)} · сутки UTC`:'История появится после первого измерения'}</p>
     {error?<div className="air-summary-error"><span>Не удалось загрузить историю.</span><Button onClick={()=>{setLoading(true);setError(false);setRetry(n=>n+1)}}>Повторить</Button></div>:<div className="air-summary-days" aria-label="Суточные средние MQ-135" aria-busy={loading}>{dates.map(day=>{const record=lookup.get(day),value=record?.avg??null,valid=value!==null&&Number.isFinite(value);return <button type="button" key={day} className={(selected||date)===day?'is-selected':''} aria-pressed={(selected||date)===day} aria-label={`${displayDate(day)}: ${loading?'загрузка':formatValue(value)+' raw'}`} onClick={()=>setSelected(day)}><span>{new Intl.DateTimeFormat('ru-RU',{weekday:'short',timeZone:'UTC'}).format(new Date(day+'T00:00:00Z'))}</span><i aria-hidden="true" style={{height:valid?`${high===low?28:12+(value-low)/(high-low)*32}px`:'4px',opacity:valid?1:.25}}/><strong>{loading?'…':formatValue(value)}</strong></button>})}</div>}
     <p className="air-summary-day-note">{loading?'Загружаем суточные средние…':error?'Текущие показания доступны слева.':active?`${displayDate(selected||date)}: ${active.count} записей · среднее ${formatValue(active.avg)} raw`:'Для этого дня нет измерений.'}</p>
    </div></div>
-  <footer>Без калибровки · raw не является AQI или концентрацией газа. Высота столбиков показывает различия только внутри этих семи дней.</footer>
+  <footer>Без калибровки · raw не является AQI или концентрацией газа. Столбики и эмоция персонажа сравнивают суточные raw внутри недели, а не безопасность воздуха.</footer>
  </section>
 }

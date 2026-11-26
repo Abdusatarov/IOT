@@ -1,0 +1,17 @@
+.air-mascot{position:relative;flex:none;width:114px;height:126px;color:var(--text)}
+.air-mascot>svg{display:block;width:100%;height:100%;overflow:visible}
+.air-mascot-body{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}
+.air-mascot-shine{fill:none;stroke:var(--accent);stroke-width:4;stroke-linecap:round;opacity:.25}
+.air-mascot-eyes{fill:var(--text);transform-box:fill-box;transform-origin:center;animation:air-mascot-blink 5.6s infinite}
+.air-mascot-eyes path,.air-mascot-mouth,.air-mascot-brows path{fill:none;stroke:var(--text);stroke-width:3;stroke-linecap:round}
+.air-mascot-cheeks{fill:var(--accent);opacity:.25}
+.air-mascot-shadow{fill:var(--accent);opacity:.12;transform-origin:60px 122px;animation:air-mascot-shadow 3.8s ease-in-out infinite}
+.air-mascot-float{animation:air-mascot-float 3.8s ease-in-out infinite}
+.air-mascot-toggle{position:absolute;right:-3px;bottom:-3px;display:grid;place-items:center;width:44px;min-height:44px;border:0;border-radius:50%;color:var(--text-muted);background:transparent;cursor:pointer}
+.air-mascot-toggle:hover{color:var(--accent);background:var(--accent-soft)}
+.air-mascot.is-paused :is(.air-mascot-eyes,.air-mascot-shadow,.air-mascot-float){animation-play-state:paused}
+@keyframes air-mascot-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes air-mascot-shadow{0%,100%{transform:scaleX(1);opacity:.12}50%{transform:scaleX(.85);opacity:.07}}
+@keyframes air-mascot-blink{0%,42%,46%,100%{transform:scaleY(1)}44%{transform:scaleY(.12)}}
+@media(max-width:767px){.air-mascot{width:90px;height:102px}}
+@media(prefers-reduced-motion:reduce){.air-mascot :is(.air-mascot-eyes,.air-mascot-shadow,.air-mascot-float){animation:none}.air-mascot-toggle{display:none}}
