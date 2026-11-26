@@ -49,3 +49,9 @@
 .overview-refresh-error{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
 @media(min-width:768px) and (max-width:1100px){.overview-page{padding:var(--space-6)}.overview-metrics{gap:var(--space-3)}.overview-metric{padding:var(--space-4)}.overview-metric-value{gap:var(--space-1)}}
 @media(max-width:767px){.overview-page{padding:var(--space-6) var(--space-4);gap:var(--space-4)}.overview-heading{align-items:flex-start;flex-direction:column}.overview-filters{align-items:stretch;flex-direction:column;gap:var(--space-4)}.overview-filters>.ui-combobox{max-width:none}.overview-period .ui-segments{display:flex}.overview-metrics{grid-template-columns:1fr;gap:var(--space-3)}.overview-metric{padding:var(--space-4)}.overview-metric-value strong{font-size:var(--font-value)}.overview-section-heading{flex-wrap:wrap;align-items:flex-start}.measurement-chart-plot{height:280px}.overview-bottom{align-items:flex-start;flex-direction:column;gap:var(--space-2)}.overview-bottom>span{text-align:left}.overview-refresh-error{align-items:flex-start;flex-direction:column;gap:var(--space-2)}}
+
+.measurement-chart{--chart-temperature:#B95712;--chart-humidity:#7652BC}
+.app.dark .measurement-chart{--chart-temperature:#FFAE69;--chart-humidity:#B89BFF}
+.measurement-chart-legend .chart-temperature{color:var(--chart-temperature)}
+.measurement-chart-legend .chart-humidity{color:var(--chart-humidity)}
+.measurement-chart-legend .chart-temperature i,.measurement-chart-legend .chart-humidity i{border-color:currentColor}
