@@ -9,6 +9,7 @@ import {MeasurementChart} from './AirChart'
 import {Button,Card,DeviceCombobox,Notice,SegmentedControl,Skeleton,EmptyState} from './components/UI'
 import type {Page} from './navigation'
 import {formatDateTime,formatValue} from './time'
+import ExternalAirWidget from './components/ExternalAirWidget'
 import './overview.css'
 
 type Props={rows:Reading[];latest:Reading[];devices:string[];district:string;onDevice:(value:string)=>void;error:string;loading:boolean;onRetry:()=>void;palette:string[];min:number;max:number;onNavigate:(page:Page)=>void}
@@ -33,6 +34,7 @@ export default function Overview({rows,latest,devices,district,onDevice,error,lo
  return <div className="overview-page">
   {notice&&<Notice onDismiss={()=>setNotice(false)}>MQ-135 raw — исходный сигнал без калибровки. По нему нельзя определить AQI или концентрацию газа.</Notice>}
   <div className="overview-heading"><div><p className="overview-eyebrow">ПОКАЗАНИЯ ДАТЧИКОВ</p><h1>Обзор измерений</h1><p>Последние доступные показания устройств в Алматы.</p></div>{hasDemo&&<span className="overview-demo">Есть демоданные</span>}</div>
+  <ExternalAirWidget/>
   <div className="overview-filters"><DeviceCombobox devices={devices} value={district} onChange={onDevice}/><div className="overview-period"><span className="ui-label">Период сравнения</span><SegmentedControl label="Период обзора" value={period} onChange={setPeriod} options={[{value:'24',label:'24 ч'},{value:'7',label:'7 д'},{value:'30',label:'30 д'}]}/></div></div>
   {error&&rows.length>0&&<Notice kind="warning"><div className="overview-refresh-error"><span>Не удалось обновить данные. Показаны последние загруженные измерения.</span><Button onClick={onRetry}>Повторить</Button></div></Notice>}
   <div className="overview-metrics">{metrics.map(({key,label,unit,deltaUnit,icon:Icon})=>{

@@ -93,3 +93,11 @@
 
 
 @media(prefers-reduced-motion:reduce){.shell-sidebar,.shell-body{transition:none}}
+
+.typewriter-heading{display:grid;isolation:isolate;overflow-wrap:anywhere}
+.typewriter-heading>span{grid-area:1/1;min-width:0}
+.typewriter-size{visibility:hidden}
+.typewriter-copy{display:block}
+.typewriter-caret{color:var(--accent);animation:typewriter-cursor .65s step-end infinite}
+@keyframes typewriter-cursor{50%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.typewriter-caret{animation:none;display:none}}
