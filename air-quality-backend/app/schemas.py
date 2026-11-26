@@ -82,7 +82,7 @@ class MeasurementOut(BaseModel):
     device_id: str
     temperature_c: float | None
     humidity_pct: float | None
-    mq135_raw: int | None
+    mq135_raw: float | None
     latitude: float | None
     longitude: float | None
     altitude_m: float | None
@@ -90,4 +90,7 @@ class MeasurementOut(BaseModel):
     measured_at: datetime
     synced: bool
     created_at: datetime
+    hour_start: datetime | None = None
+    sample_count: int | None = None
+    gps_sample_at: datetime | None = None
     processed: MetricsOut

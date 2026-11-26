@@ -1,7 +1,7 @@
 from pydantic import ValidationError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from .models import Measurement, ProcessedMeasurement
+from .models import Measurement, ProcessedMeasurement, SyncReceipt
 from .schemas import MeasurementIn, SyncResult, ItemResult
 from .processing import process_saved
 
@@ -24,7 +24,10 @@ def sync_batch(items, sessions, processor):
     with sessions.begin() as session:
         insert = pg_insert if session.bind.dialect.name == 'postgresql' else sqlite_insert
         for index, measurement in sorted(valid, key=lambda x: (str(x[1].measurement_id), x[0])):
-            stmt = insert(Measurement).values(**measurement.model_dump()).on_conflict_do_nothing(
+            if session.get(SyncReceipt, measurement.measurement_id) is not None:
+                results.append(ItemResult(index=index, measurement_id=str(measurement.measurement_id), status='duplicate'))
+                continue
+            stmt = insert(Measurement.__table__).values(**measurement.model_dump()).on_conflict_do_nothing(
                 index_elements=['measurement_id']).returning(Measurement.id)
             row_id = session.scalar(stmt)
             status = 'duplicate' if row_id is None else 'accepted'

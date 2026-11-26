@@ -159,7 +159,7 @@ def test_openapi(client):
 def test_key_auth(app, measurement):
     from app.config import Settings
     from app.main import create_app
-    secure = create_app(Settings(database_url=app.state.engine.url.render_as_string(hide_password=False), api_key='test-key'))
+    secure = create_app(Settings(database_url=app.state.engine.url.render_as_string(hide_password=False), api_key='test-key', hourly_storage=False))
     with TestClient(secure) as c:
         assert send(c, measurement).status_code == 401
         assert c.get('/api/v1/health').status_code == 200

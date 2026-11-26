@@ -10,15 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from .config import Settings
 from .db import make_engine
-from .models import Measurement, ProcessedMeasurement
+from .models import Measurement, ProcessedMeasurement, SyncReceipt
 from .processing import SensorProcessor
 from .schemas import BatchIn, MeasurementIn, MeasurementOut, SyncResult
 from .service import sync_batch, validation_details
+from .hourly import sync_hourly
+from .quality import clean_output
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,13 @@ def create_app(settings=None, processor=None):
     app.state.processor = processor or SensorProcessor()
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
                        allow_methods=['GET', 'POST'], allow_headers=['Content-Type', 'X-API-Key'])
+
+    def store_batch(items, sessions, processor):
+        return (sync_hourly if settings.hourly_storage else sync_batch)(items, sessions, processor)
+
+    def output(row):
+        data = MeasurementOut.model_validate(row)
+        return data.model_copy(update={name: value for name, value in clean_output(data.model_dump()).items() if name in ('mq135_raw', 'temperature_c', 'humidity_pct')}) if settings.hourly_storage else data
 
     def authorize(x_api_key: Annotated[str | None, Header()] = None):
         if settings.api_key and not secrets.compare_digest(x_api_key or '', settings.api_key):
@@ -65,7 +74,7 @@ def create_app(settings=None, processor=None):
 
     @app.post('/api/v1/sync', response_model=SyncResult, dependencies=[Depends(authorize)])
     def sync(body: BatchIn):
-        return sync_batch(body.measurements, app.state.sessions, app.state.processor)
+        return store_batch(body.measurements, app.state.sessions, app.state.processor)
 
     @app.post('/api/v1/import', response_model=SyncResult, dependencies=[Depends(authorize)])
     def import_json(body: Annotated[BatchIn | list, Body()]):
@@ -75,7 +84,7 @@ def create_app(settings=None, processor=None):
             items = body
         else:
             items = body.measurements
-        return sync_batch(items, app.state.sessions, app.state.processor)
+        return store_batch(items, app.state.sessions, app.state.processor)
 
     def filters(device_id: str | None = None, start: datetime | None = Query(None, alias='from'),
                 end: datetime | None = Query(None, alias='to'),
@@ -100,7 +109,7 @@ def create_app(settings=None, processor=None):
     def dashboard_snapshot(hour: int = Query(24, ge=0, le=24), session=Depends(session_dependency)):
         end, count, minimum, maximum = session.execute(select(
             func.max(Measurement.measured_at), func.count(Measurement.id),
-            func.min(Measurement.mq135_raw), func.max(Measurement.mq135_raw))).one()
+            func.min(case((Measurement.mq135_raw.between(1, 4095), Measurement.mq135_raw)) if settings.hourly_storage else Measurement.mq135_raw), func.max(case((Measurement.mq135_raw.between(1, 4095), Measurement.mq135_raw)) if settings.hourly_storage else Measurement.mq135_raw))).one()
         if end is None:
             return {'end': None, 'cutoff': None, 'total': 0, 'devices': [],
                     'min': 0, 'max': 4095, 'measurements': []}
@@ -110,7 +119,7 @@ def create_app(settings=None, processor=None):
             order_by=(Measurement.measured_at.desc(), Measurement.id.desc())).label('position')
         ).where(Measurement.measured_at <= cutoff).subquery()
         names = ('measurement_id', 'device_id', 'temperature_c', 'humidity_pct', 'mq135_raw',
-                 'latitude', 'longitude', 'altitude_m', 'gps_accuracy_m', 'measured_at')
+                 'latitude', 'longitude', 'altitude_m', 'gps_accuracy_m', 'measured_at', 'hour_start', 'sample_count', 'gps_sample_at')
         rows = session.execute(select(*(getattr(Measurement, name) for name in names))
             .join(ranked, Measurement.id == ranked.c.id).where(ranked.c.position == 1)
             .order_by(Measurement.device_id)).mappings().all()
@@ -118,28 +127,31 @@ def create_app(settings=None, processor=None):
         return {'end': end, 'cutoff': cutoff, 'total': count, 'devices': devices,
                 'min': minimum if minimum is not None else 0,
                 'max': maximum if maximum is not None else 4095,
-                'measurements': [dict(row) for row in rows]}
+                'measurements': [clean_output(row) if settings.hourly_storage else dict(row) for row in rows]}
 
     @app.get('/api/v1/measurements', dependencies=[Depends(authorize)])
     def measurements(clauses=Depends(filters), limit: int = Query(100, ge=1, le=1000),
                      offset: int = Query(0, ge=0), session=Depends(session_dependency)):
         rows = session.scalars(select(Measurement).where(*clauses).order_by(Measurement.measured_at.desc(), Measurement.id.desc()).limit(limit).offset(offset)).all()
         total = session.scalar(select(func.count()).select_from(Measurement).where(*clauses))
-        return {'total': total, 'limit': limit, 'offset': offset, 'measurements': [MeasurementOut.model_validate(r) for r in rows]}
+        return {'total': total, 'limit': limit, 'offset': offset, 'measurements': [output(r) for r in rows]}
 
     @app.get('/api/v1/measurements/latest', response_model=MeasurementOut, dependencies=[Depends(authorize)])
     def latest(clauses=Depends(filters), session=Depends(session_dependency)):
         row = session.scalar(select(Measurement).where(*clauses).order_by(Measurement.measured_at.desc(), Measurement.id.desc()).limit(1))
         if row is None:
             raise HTTPException(404, 'measurement_not_found')
-        return row
+        return output(row)
 
     @app.get('/api/v1/measurements/{measurement_id}', response_model=MeasurementOut, dependencies=[Depends(authorize)])
     def detail(measurement_id: UUID, session=Depends(session_dependency)):
         row = session.scalar(select(Measurement).where(Measurement.measurement_id == measurement_id))
         if row is None:
+            receipt = session.get(SyncReceipt, measurement_id)
+            row = session.get(Measurement, receipt.aggregate_id) if receipt and receipt.aggregate_id else None
+        if row is None:
             raise HTTPException(404, 'measurement_not_found')
-        return row
+        return output(row)
 
     @app.get('/api/v1/map', dependencies=[Depends(authorize)])
     def map_points(clauses=Depends(filters), limit: int = Query(1000, ge=1, le=1000),
@@ -148,6 +160,8 @@ def create_app(settings=None, processor=None):
         rows = session.scalars(select(Measurement).where(*clauses).order_by(Measurement.measured_at.desc(), Measurement.id.desc()).limit(limit).offset(offset)).all()
         fields = ('measurement_id', 'device_id', 'latitude', 'longitude', 'altitude_m', 'gps_accuracy_m', 'temperature_c', 'humidity_pct', 'mq135_raw', 'measured_at')
         points = [{**{f: getattr(r, f) for f in fields}, 'air_quality_index': r.processed.air_quality_index, 'measured_at': r.measured_at.isoformat().replace('+00:00', 'Z')} for r in rows]
+        if settings.hourly_storage:
+            points = [clean_output(point) for point in points]
         total = session.scalar(select(func.count()).select_from(Measurement).where(*clauses))
         return {'points': points, 'total': total, 'limit': limit, 'offset': offset}
 
@@ -157,6 +171,9 @@ def create_app(settings=None, processor=None):
         aggregates = [func.count(Measurement.id)]
         for f in fields:
             col = getattr(Measurement, f)
+            if settings.hourly_storage and f in ('mq135_raw', 'temperature_c', 'humidity_pct'):
+                low, high = {'mq135_raw': (1, 4095), 'temperature_c': (-40, 80), 'humidity_pct': (0, 100)}[f]
+                col = case((col.between(low, high), col))
             aggregates.extend([func.count(col), func.min(col), func.max(col), func.avg(col)])
         row = session.execute(select(*aggregates).where(*clauses)).one()
         return {'count': row[0], 'metrics': {f: dict(zip(('count', 'min', 'max', 'avg'), row[1+i*4:5+i*4])) for i, f in enumerate(fields)}}
@@ -181,7 +198,7 @@ def create_app(settings=None, processor=None):
             key = timestamp.astimezone(timezone.utc).date().isoformat()
             entry = days.setdefault(key, {'date': key, 'count': 0, 'values': []})
             entry['count'] += 1
-            if raw is not None:
+            if raw is not None and (not settings.hourly_storage or 1 <= raw <= 4095):
                 entry['values'].append(raw)
         result = []
         for key in sorted(days):

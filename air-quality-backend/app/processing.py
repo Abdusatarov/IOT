@@ -24,7 +24,7 @@ class SensorProcessor:
 
 
 def process_saved(sessions, ids, processor):
-    """Raw is already committed. A processing failure cannot roll it back."""
+    """Measurements are already committed. Processing failure cannot roll them back."""
     for measurement_id in ids:
         try:
             with sessions.begin() as session:

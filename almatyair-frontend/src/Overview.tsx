@@ -32,7 +32,7 @@ export default function Overview({rows,latest,devices,district,onDevice,error,lo
  const hasDemo=scoped.some(row=>row.is_synthetic===true)
  const hasCoordinates=latest.some(row=>row.latitude!==null&&row.longitude!==null)
  return <div className="overview-page">
-  {notice&&<Notice onDismiss={()=>setNotice(false)}>MQ-135 raw — исходный сигнал без калибровки. По нему нельзя определить AQI или концентрацию газа.</Notice>}
+  {notice&&<Notice onDismiss={()=>setNotice(false)}>MQ-135 raw — исходный сигнал без калибровки. По нему нельзя определить AQI или концентрацию газа.{latest.some(row=>row.hour_start)&&' Новые записи — средние за час; текущий час дополняется по мере поступления данных.'}</Notice>}
   <div className="overview-heading"><div><p className="overview-eyebrow">ПОКАЗАНИЯ ДАТЧИКОВ</p><h1>Обзор измерений</h1><p>Последние доступные показания устройств в Алматы.</p></div>{hasDemo&&<span className="overview-demo">Есть демоданные</span>}</div>
   <AirSummary latest={latest} device={district} onAnalyze={()=>onNavigate('analytics')}/>
   <div className="overview-filters"><DeviceCombobox devices={devices} value={district} onChange={onDevice}/><div className="overview-period"><span className="ui-label">Период сравнения</span><SegmentedControl label="Период обзора" value={period} onChange={setPeriod} options={[{value:'24',label:'24 ч'},{value:'7',label:'7 д'},{value:'30',label:'30 д'}]}/></div></div>

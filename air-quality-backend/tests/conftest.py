@@ -14,7 +14,7 @@ def app(tmp_path, monkeypatch):
     # TEST_DATABASE_URL must point to a disposable test database: tables are reset.
     url = os.environ.get('TEST_DATABASE_URL', f'sqlite:///{tmp_path}/test.db')
     monkeypatch.setenv('DATABASE_URL', url)
-    application = create_app(Settings(database_url=url, api_key=None))
+    application = create_app(Settings(database_url=url, api_key=None, hourly_storage=False))
     command.upgrade(Config('alembic.ini'), 'head')
     with application.state.engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):

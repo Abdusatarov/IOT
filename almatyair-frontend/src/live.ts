@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useState} from 'react'
-export type Reading={measurement_id:string;device_id:string;latitude:number|null;longitude:number|null;mq135_raw:number|null;temperature_c:number|null;humidity_pct:number|null;gps_accuracy_m:number|null;measured_at:string;is_synthetic?:boolean;altitude_m?:number|null}
+export type Reading={measurement_id:string;device_id:string;latitude:number|null;longitude:number|null;mq135_raw:number|null;temperature_c:number|null;humidity_pct:number|null;gps_accuracy_m:number|null;measured_at:string;is_synthetic?:boolean;altitude_m?:number|null;hour_start?:string|null;sample_count?:number|null;gps_sample_at?:string|null}
 let readers=0
 let cache:{promise:Promise<Reading[]>;controller:AbortController}|null=null
 function fullHistory(){
