@@ -1,0 +1,23 @@
+.air-summary{border:1px solid var(--border);border-radius:20px;background:var(--surface);padding:var(--space-6);min-width:0;overflow:hidden;position:relative}
+.air-summary::before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-soft))}
+.air-summary-header{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.air-summary-brand{display:flex;align-items:center;gap:7px;color:var(--accent);font-size:11px;font-weight:600;letter-spacing:.12em}
+.air-summary-header h2{margin:10px 0 5px;font-size:var(--font-section)}
+.air-summary-header p,.air-summary-label,.air-summary-period,.air-summary-day-note,.air-summary footer{color:var(--text-muted);font-size:var(--font-caption);line-height:1.6;margin:0}
+.air-summary-body{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(0,1.2fr);gap:32px;align-items:center;padding:24px 0}
+.air-summary-signal{display:flex;align-items:center;gap:20px;min-width:0}
+.air-summary-orbit{flex:none;width:96px;height:96px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;box-shadow:0 0 0 9px var(--bg),0 0 0 10px var(--border)}
+.air-summary-value{font-family:var(--font-data);font-size:42px;line-height:1.3;letter-spacing:-.05em;margin:5px 0;color:var(--text)}
+.air-summary-value>span{font-family:var(--font-ui);font-size:14px;letter-spacing:0;color:var(--text-muted);margin-left:8px}
+.air-summary-stats{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:12px}
+.air-summary-stats>span{display:flex;align-items:center;gap:6px;color:var(--text);font-family:var(--font-data);font-size:14px}
+.air-summary-stats svg{color:var(--accent)}
+.air-summary-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin:10px 0}
+.air-summary-days button{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;min-width:0;padding:9px 2px;background:var(--bg);border:1px solid transparent;border-radius:10px;color:var(--text-muted);font-size:11px;min-height:112px;cursor:pointer}
+.air-summary-days button.is-selected{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.air-summary-days i{width:14px;max-width:60%;border-radius:5px 5px 2px 2px;background:var(--accent);display:block;margin-top:auto}
+.air-summary-days strong{font-family:var(--font-data);font-size:11px;color:var(--text);font-weight:500}
+.air-summary-error{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--text-muted);font-size:var(--font-caption);min-height:132px}
+.air-summary footer{border-top:1px solid var(--border);padding-top:14px}
+@media(max-width:1000px){.air-summary-body{grid-template-columns:1fr;gap:24px}.air-summary-signal{padding:6px 8px}}
+@media(max-width:767px){.air-summary{padding:20px 16px}.air-summary-header>.ui-button{padding:5px}.air-summary-header h2{font-size:20px}.air-summary-orbit{width:70px;height:70px}.air-summary-signal{gap:18px}.air-summary-value{font-size:36px}.air-summary-days{gap:4px}.air-summary-days button{border-radius:8px}.air-summary-days strong{font-size:10px}}
